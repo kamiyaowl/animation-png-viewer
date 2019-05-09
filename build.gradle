@@ -1,0 +1,35 @@
+buildscript {
+  ext.kotlin_version = '1.3.30'
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+  }
+}
+
+apply plugin: 'kotlin'
+apply plugin: 'application'
+
+mainClassName = 'apng.MainKt'
+
+defaultTasks 'run'
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  compile "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+  testCompile 'junit:junit:5.4.2'
+  testCompile "org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version"
+}
+
+jar {
+  manifest { attributes 'Main-Class': 'apng.MainKt' }
+  from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+}
+
+wrapper {
+  gradleVersion = "5.4.1"
+}
