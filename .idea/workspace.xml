@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="BookmarkManager">
-    <bookmark url="file://$PROJECT_DIR$/src/apng/PngData.kt" line="28" />
-  </component>
   <component name="ChangeListManager">
     <list default="true" id="9a4d1a05-5c0e-46c6-8f39-d12a4466b23f" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
@@ -23,7 +20,7 @@
             <entry file="file://$PROJECT_DIR$/src/apng/PngData.kt">
               <provider selected="true" editor-type-id="text-editor">
                 <state relative-caret-position="442">
-                  <caret line="38" column="90" selection-start-line="38" selection-start-column="90" selection-end-line="38" selection-end-column="90" />
+                  <caret line="40" column="65" selection-start-line="40" selection-start-column="65" selection-end-line="40" selection-end-column="65" />
                   <folding>
                     <element signature="e#14#60#0" expanded="true" />
                   </folding>
@@ -123,7 +120,7 @@
     </panes>
   </component>
   <component name="PropertiesComponent">
-    <property name="com.android.tools.idea.instantapp.provision.ProvisionBeforeRunTaskProvider.myTimeStamp" value="1558185678774" />
+    <property name="com.android.tools.idea.instantapp.provision.ProvisionBeforeRunTaskProvider.myTimeStamp" value="1558186793298" />
     <property name="restartRequiresConfirmation" value="false" />
     <property name="settings.editor.selected.configurable" value="preferences.keymap" />
   </component>
@@ -193,16 +190,16 @@
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" />
       <window_info anchor="bottom" id="Run" order="2" sideWeight="0.4973384" weight="0.32981315" />
-      <window_info active="true" anchor="bottom" id="Debug" order="3" sideWeight="0.49401796" visible="true" weight="0.35662064" />
+      <window_info active="true" anchor="bottom" id="Debug" order="3" sideWeight="0.49302095" visible="true" weight="0.35662064" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="6" />
       <window_info anchor="bottom" id="Docker" order="7" show_stripe_button="false" />
       <window_info anchor="bottom" id="Version Control" order="8" />
       <window_info anchor="bottom" id="SBT Console" order="9" sideWeight="0.49954996" weight="0.32981315" />
-      <window_info anchor="bottom" id="Terminal" order="10" sideWeight="0.50598204" side_tool="true" visible="true" weight="0.35662064" />
+      <window_info anchor="bottom" id="Terminal" order="10" sideWeight="0.50697905" side_tool="true" visible="true" weight="0.35662064" />
       <window_info anchor="bottom" id="Event Log" order="11" side_tool="true" />
-      <window_info anchor="bottom" id="Messages" order="12" sideWeight="0.49501497" weight="0.32981315" />
+      <window_info anchor="bottom" id="Messages" order="12" sideWeight="0.49401796" weight="0.32981315" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
@@ -218,9 +215,9 @@
       <breakpoints>
         <line-breakpoint enabled="true" type="kotlin-line">
           <url>file://$PROJECT_DIR$/src/apng/PngData.kt</url>
-          <line>39</line>
+          <line>42</line>
           <properties />
-          <option name="timeStamp" value="7" />
+          <option name="timeStamp" value="8" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
@@ -248,7 +245,7 @@
     <entry file="file://$PROJECT_DIR$/src/apng/PngData.kt">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="442">
-          <caret line="38" column="90" selection-start-line="38" selection-start-column="90" selection-end-line="38" selection-end-column="90" />
+          <caret line="40" column="65" selection-start-line="40" selection-start-column="65" selection-end-line="40" selection-end-column="65" />
           <folding>
             <element signature="e#14#60#0" expanded="true" />
           </folding>
