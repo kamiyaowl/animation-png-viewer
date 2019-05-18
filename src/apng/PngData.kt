@@ -36,9 +36,9 @@ class PngData {
             }
             while(stream.available() > 0) {
                 val (byteLen) = readInt(1)
-                val (chunkType) = readByte(4)
+                val chunkType = readByte(4).map { it.toChar() }.joinToString(separator = "")
                 val chunkData = readInt(byteLen / 4)
-                val crc = readInt(1)
+                val (crc) = readInt(1)
             }
             // チャンクデータの読み出し
             stream.close()
