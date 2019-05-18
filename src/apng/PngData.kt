@@ -19,32 +19,47 @@ val Collection<Byte>.toIntArray get() = {
 
 class PngData {
     companion object {
-        private val SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
-        // Result, ErrorMessage
-        fun read(path: String): PngData {
-            val stream: InputStream = File(path).inputStream()
-            fun readByte(len: Int) : ByteArray {
-                val buf = ByteArray(len)
-                stream.read(buf, 0, buf.size)
-                return buf
+        val crcTablble: ByteArray? = null
+        fun crc32(src: ByteArray) {
+            // 事前テーブルの計算
+            for(i in 0 until 256) {
+                var c: UInt = i.toUInt()
+                for(j in 0 until 8) {
+                    c = if (c and 1u != 0u) { 0xedb88320 } else { 0x0 }
+                }
             }
-            val dst = PngData()
-            val sig = readByte(SIGNATURE.size)
-            if (!sig.contentEquals(SIGNATURE)) {
-                throw IllegalArgumentException("PNGファイルではありません")
-            }
-            while(stream.available() > 0) {
-                val (dataLen) = readByte(4).toIntArray()
-                val readLen = 4 + dataLen + 1 // chunktype(1) + chunkdata + crc(1)
-                val data = readByte(readLen)
+            //  実装についてはwiki参照
 
-                val chunkTypeStr = data.take(4).joinToString("") { "${it.toChar()}" }
-                val chunkData = data.drop(4).take(dataLen).toIntArray()
-                val crc = data.last() // chunkType + chunkDataで計算
-            }
-            // チャンクデータの読み出し
-            stream.close()
-            return dst
         }
+    }
+    private val fileHeadSignature = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+
+
+    // 指定されたファイルを読み込んで、ファイルに記載されたパラメータを内部変数にセットします
+    fun read(path: String) {
+        val stream: InputStream = File(path).inputStream()
+        fun readByte(len: Int) : ByteArray {
+            val buf = ByteArray(len)
+            stream.read(buf, 0, buf.size)
+            return buf
+        }
+        val sig = readByte(fileHeadSignature.size)
+        if (!sig.contentEquals(fileHeadSignature)) {
+            throw IllegalArgumentException("PNGファイルではありません")
+        }
+        while(stream.available() > 0) {
+            val (dataLen) = readByte(4).toIntArray()
+            val readLen = 4 + dataLen + 1 // chunktype(1) + chunkdata + crc(1)
+            val data = readByte(readLen)
+
+            val chunkTypeStr = data.take(4).joinToString("") { "${it.toChar()}" }
+            val chunkData =
+                if (dataLen > 0)  { data.drop(4).take(dataLen).toByteArray() }
+                else { ByteArray(0) } // IENDの場合、データは空
+            val crc = data.drop(4 + dataLen).take(4).toIntArray() // chunkType + chunkDataで計算
+            // CRC検査
+        }
+        // チャンクデータの読み出し
+        stream.close()
     }
 }
