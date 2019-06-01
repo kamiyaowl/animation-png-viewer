@@ -39,7 +39,9 @@ func (self *Image) parseIHDR(data []uint8) (err error) {
 
 	return nil
 }
-
+func (self *Image) parseIDAT(data []uint8) (err error) {
+	return nil
+}
 func (self *Image) parsePng(f *os.File) (err error) {
 	// png header check
 	validSignature := []uint8{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}
@@ -55,6 +57,9 @@ func (self *Image) parsePng(f *os.File) (err error) {
 		return errors.New("pngファイルではない")
 	}
 	// read chunks
+	isReadIhdr := false
+	isReadIdat := false
+	isReadIend := false
 	for {
 		// read header: length(4uint8) + chunk-type
 		headersBuf := make([]uint8, 8)
@@ -92,8 +97,14 @@ func (self *Image) parsePng(f *os.File) (err error) {
 		// chunk typeで分岐
 		switch chunkType {
 		case "IHDR":
+			isReadIhdr = true
 			err = self.parseIHDR(dataBuf)
+		case "IDAT":
+			isReadIdat = true
+			err = self.parseIDAT(dataBuf)
 		case "IEND":
+			isReadIend = true
+			break
 		default:
 			fmt.Printf("%sは未実装ヘッダです\n", chunkType)
 			err = nil
@@ -104,20 +115,30 @@ func (self *Image) parsePng(f *os.File) (err error) {
 			return err
 		}
 	}
+	// 必須チャンクは来ましたか
+	if !isReadIhdr {
+		return errors.New("IHDRが記述されていません")
+	}
+	if !isReadIdat {
+		return errors.New("IDATが記述されていません")
+	}
+	if !isReadIend {
+		return errors.New("IENDが記述されていません")
+	}
+	// 完璧やん
 	return nil
 }
 func main() {
 	// TODO: set path from cmd argument
 	path := "sample_data/PNG_transparency_demonstration_1.png"
-	fmt.Println("image file opening...")
+
 	f, err := os.Open(path)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	defer f.Close()
-	// read and parse png
-	fmt.Println("png parsing...")
+
 	img := Image{}
 	err = img.parsePng(f)
 	if err != nil {
