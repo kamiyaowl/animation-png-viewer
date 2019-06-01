@@ -1,6 +1,7 @@
 package main
 
 import (
+	//"hash/crc32"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -8,24 +9,29 @@ import (
 	"reflect"
 )
 
+type Image struct {
+	width  uint32
+	height uint32
+}
+
 // TODO: PNGをちゃんと型にしてあげる
-func parsePng(f *os.File) (png []uint8, err error) {
+func (self *Image) parsePng(f *os.File) (err error) {
 	// png header check
 	validSignature := []uint8{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}
 	signature := make([]uint8, len(validSignature))
 	n, err := f.Read(signature)
 	if n == 0 {
-		return nil, errors.New("png headerが読み取れなかった")
+		return errors.New("png headerが読み取れなかった")
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if !reflect.DeepEqual(validSignature, signature) {
-		return nil, errors.New("pngファイルではない")
+		return errors.New("pngファイルではない")
 	}
 	// read chunks
 	for {
-		// length(4uint8) + chunk-type
+		// read header: length(4uint8) + chunk-type
 		headersBuf := make([]uint8, 8)
 		n, err := f.Read(headersBuf)
 		if n < len(headersBuf) {
@@ -33,16 +39,43 @@ func parsePng(f *os.File) (png []uint8, err error) {
 			break
 		}
 		if err != nil {
-			return nil, errors.New("Chunkヘッダの読み込みエラー")
+			return errors.New("Chunkヘッダの読み込みエラー")
 		}
 		length := binary.BigEndian.Uint32(headersBuf[0:4])
-		chunkType := string(headersBuf[4:4])
-		fmt.Println(length)
-		fmt.Println(chunkType)
+		chunkType := string(headersBuf[4:8])
+		// read data
+		dataBuf := make([]uint8, length)
+		n, err = f.Read(dataBuf)
+		if err != nil {
+			return errors.New("Chunkデータの読み込みエラー")
+		}
+		// read crc
+		crcBuf := make([]uint8, 4)
+		n, err = f.Read(crcBuf)
+		if err != nil {
+			return errors.New("Chunk CRCの読み込みエラー")
+		}
+		// TODO: CRCの実装
+		// crc := binary.BigEndian.Uint32(crcBuf)
+		// TODO: check crc
+		// dataCrc := crc32.ChecksumIEEE(dataBuf) // ChunkTypeからやるべき
+		// if crc != dataCrc {
+		// 	fmt.Printf("crc mismatch chunkType:%s crc:%d dataCrc:%d", chunkType, crc, dataCrc)
+		// 	continue
+		// }
+		fmt.Printf("chunkType:%s length:%d\n", chunkType, length)
+		// chunk typeで分岐
+		switch chunkType {
+		case "IHDR":
+		case "IEND":
+		default:
+			fmt.Printf("%sは未実装ヘッダです\n", chunkType)
+			continue
+		}
 		// Test
 		break
 	}
-	return nil, nil
+	return nil
 }
 func main() {
 	// TODO: set path from cmd argument
@@ -56,13 +89,14 @@ func main() {
 	defer f.Close()
 	// read and parse png
 	fmt.Println("png parsing...")
-	png, err := parsePng(f)
+	img := Image{}
+	err = img.parsePng(f)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	// TODO: show png image
-	fmt.Println(png)
+	fmt.Println(img)
 
 	fmt.Println("done.")
 }
