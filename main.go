@@ -9,12 +9,37 @@ import (
 	"reflect"
 )
 
+// TODO: 別ファイルにしたほうが良くないですか
+// type definition
+
 type Image struct {
-	width  uint32
-	height uint32
+	ihdr Ihdr
+}
+type Ihdr struct {
+	width     uint32
+	height    uint32
+	bitDepth  uint8
+	colorType uint8
+	compress  uint8
+	filter    uint8
+	interlace uint8
 }
 
-// TODO: PNGをちゃんと型にしてあげる
+func (self *Image) parseIHDR(data []uint8) (err error) {
+	if len(data) != 13 {
+		return errors.New("IHDRのヘッダサイズは13でなければならない")
+	}
+	self.ihdr.width = binary.BigEndian.Uint32(data[0:4])
+	self.ihdr.height = binary.BigEndian.Uint32(data[4:8])
+	self.ihdr.bitDepth = data[8]
+	self.ihdr.colorType = data[9]
+	self.ihdr.compress = data[10]
+	self.ihdr.filter = data[11]
+	self.ihdr.interlace = data[12]
+
+	return nil
+}
+
 func (self *Image) parsePng(f *os.File) (err error) {
 	// png header check
 	validSignature := []uint8{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}
@@ -67,13 +92,17 @@ func (self *Image) parsePng(f *os.File) (err error) {
 		// chunk typeで分岐
 		switch chunkType {
 		case "IHDR":
+			err = self.parseIHDR(dataBuf)
 		case "IEND":
 		default:
 			fmt.Printf("%sは未実装ヘッダです\n", chunkType)
+			err = nil
 			continue
 		}
-		// Test
-		break
+		// error check
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
