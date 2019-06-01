@@ -13,6 +13,10 @@ func main() {
 	)
 	flag.Parse()
 
+	if *src == "" {
+		fmt.Println("srcオプションで読み込むファイルを指定してください。 例: -src <filepath>")
+		return
+	}
 	f, err := os.Open(*src)
 	if err != nil {
 		fmt.Println(err)
