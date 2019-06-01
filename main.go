@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 )
 import "./apng"
 
@@ -17,15 +16,8 @@ func main() {
 		fmt.Println("srcオプションで読み込むファイルを指定してください。 例: -src <filepath>")
 		return
 	}
-	f, err := os.Open(*src)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer f.Close()
-
 	img := apng.Image{}
-	err = img.Parse(f)
+	err := img.Parse(*src)
 	if err != nil {
 		fmt.Println(err)
 		return

@@ -41,7 +41,14 @@ func (self *Image) parseIDAT(data []uint8) (err error) {
 	return nil
 }
 
-func (self *Image) Parse(f *os.File) (err error) {
+func (self *Image) Parse(src string) (err error) {
+	// read file
+	f, err := os.Open(src)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer f.Close()
 	// png header check
 	validSignature := []uint8{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}
 	signature := make([]uint8, len(validSignature))
