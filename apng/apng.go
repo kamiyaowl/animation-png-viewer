@@ -9,8 +9,6 @@ import (
 	"reflect"
 )
 
-////////////////////////////////////////////////////////////////////////////
-// type definition
 type Image struct {
 	ihdr Ihdr
 }
@@ -23,9 +21,6 @@ type Ihdr struct {
 	filter    uint8
 	interlace uint8
 }
-
-////////////////////////////////////////////////////////////////////////////
-// private functions
 
 func (self *Image) parseIHDR(data []uint8) (err error) {
 	if len(data) != 13 {
@@ -45,9 +40,6 @@ func (self *Image) parseIDAT(data []uint8) (err error) {
 	// TODO: Implement here
 	return nil
 }
-
-////////////////////////////////////////////////////////////////////////////
-// public functions
 
 func (self *Image) Parse(f *os.File) (err error) {
 	// png header check

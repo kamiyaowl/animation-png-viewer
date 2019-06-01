@@ -1,16 +1,19 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 )
 import "./apng"
 
 func main() {
-	// TODO: set path from cmd argument
-	path := "sample_data/PNG_transparency_demonstration_1.png"
+	var (
+		src = flag.String("src", "", "png filepath")
+	)
+	flag.Parse()
 
-	f, err := os.Open(path)
+	f, err := os.Open(*src)
 	if err != nil {
 		fmt.Println(err)
 		return
