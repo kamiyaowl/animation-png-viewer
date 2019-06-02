@@ -1,10 +1,10 @@
 package apng
 
 import (
-	//"hash/crc32"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"os"
 	"reflect"
 )
@@ -91,14 +91,15 @@ func (self *Image) Parse(src string) (err error) {
 		if err != nil {
 			return errors.New("Chunk CRCの読み込みエラー")
 		}
-		// TODO: CRCの実装
-		// crc := binary.BigEndian.Uint32(crcBuf)
-		// TODO: check crc
-		// dataCrc := crc32.ChecksumIEEE(dataBuf) // ChunkTypeからやるべき
-		// if crc != dataCrc {
-		// 	fmt.Printf("crc mismatch chunkType:%s crc:%d dataCrc:%d", chunkType, crc, dataCrc)
-		// 	continue
-		// }
+		// check crc
+		crc := binary.BigEndian.Uint32(crcBuf)
+		crcSrc := append(headersBuf[4:8], dataBuf...)
+		dataCrc := crc32.ChecksumIEEE(crcSrc)
+		if crc != dataCrc {
+			fmt.Printf("crc mismatch chunkType:%s crc:%d dataCrc:%d", chunkType, crc, dataCrc)
+			continue
+		}
+		// chunktypeで分岐
 		fmt.Printf("chunkType:%s length:%d\n", chunkType, length)
 		switch chunkType {
 		case "IHDR":
