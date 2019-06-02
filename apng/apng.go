@@ -7,11 +7,23 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"image"
 	"os"
 	"reflect"
 )
 
-type Image struct {
+// scanlineごとにある
+type FilterType int
+
+const (
+	None FilterType = iota
+	Sub
+	Up
+	Average
+	Paeth
+)
+
+type Apng struct {
 	ihdr Ihdr
 	idat Idat
 }
@@ -26,7 +38,28 @@ type Ihdr struct {
 }
 type Idat []uint8
 
-func (self *Image) parseIHDR(data []uint8) (err error) {
+func (self *Apng) BitPerPixel() (uint8, error) {
+	switch self.ihdr.colorType {
+	case 0:
+		// grayscale
+		return self.ihdr.bitDepth, nil
+	case 2:
+		// true color
+		return self.ihdr.bitDepth * 3, nil
+	case 3:
+		// index color
+		return self.ihdr.bitDepth, nil
+	case 4:
+		// grayscale(with alpha)
+		return self.ihdr.bitDepth * 2, nil
+	case 6:
+		// true color(with alpha)
+		return self.ihdr.bitDepth * 4, nil
+	default:
+		return 0, errors.New("colorTypeが正しくない")
+	}
+}
+func (self *Apng) parseIHDR(data []uint8) (err error) {
 	if len(data) != 13 {
 		return errors.New("IHDRのヘッダサイズは13でなければならない")
 	}
@@ -40,29 +73,47 @@ func (self *Image) parseIHDR(data []uint8) (err error) {
 
 	return nil
 }
-func (self *Image) parseIDAT(data []uint8) (err error) {
+func (self *Apng) parseIDAT(data []uint8) (err error) {
+	// IDATは
+	self.idat = append(self.idat, data...)
+	return nil
+}
+func (self *Apng) ToImage() (img image.Image, err error) {
 	// deflateめんどいしライブラリで許して
-	readBuf := bytes.NewBuffer(data)
+	readBuf := bytes.NewBuffer(self.idat)
 	zr, err := zlib.NewReader(readBuf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer zr.Close()
 
-	var dst bytes.Buffer
-	_, err = dst.ReadFrom(zr)
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(zr)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if len(self.idat) == 0 {
-		self.idat = dst.Bytes()
-	} else {
-		self.idat = append(self.idat, dst.Bytes()...)
+	// byte列に展開
+	extracted := buf.Bytes()
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	bitPerPixel, err := self.BitPerPixel()
+	if err != nil {
+		return nil, err
+	}
+	lineBytes := int(bitPerPixel)*int(self.ihdr.width) + 1
+	// filter処理をもとに戻す。scanlineごとのfilter-typeで分岐
+	dst := image.NewRGBA(image.Rect(0, 0, int(self.ihdr.width), int(self.ihdr.height)))
+	for j := 0; j < int(self.ihdr.height); j++ {
+		basePtr := j * lineBytes
+		filterType := extracted[basePtr]
+		switch filterType {
+		}
+	}
+	return dst, nil
 }
 
-func (self *Image) Parse(src string) (err error) {
+func (self *Apng) Parse(src string) (err error) {
 	// read file
 	f, err := os.Open(src)
 	if err != nil {
