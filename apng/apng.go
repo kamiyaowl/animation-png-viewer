@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"image"
+	"image/color"
 	"os"
 	"reflect"
 )
@@ -104,11 +105,18 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 	lineBytes := int(bitPerPixel)*self.Ihdr.Width + 1
 	// filter処理をもとに戻す。scanlineごとのfilter-typeで分岐
 	dst := image.NewRGBA(image.Rect(0, 0, self.Ihdr.Width, self.Ihdr.Height))
+	// TODO: remove image testcode
+	for i := 0; i < self.Ihdr.Width; i++ {
+		for j := 0; j < self.Ihdr.Height; j++ {
+			dst.Set(i, j, color.RGBA{uint8(i % 255), uint8(j % 255), uint8((i + j) % 255), uint8(255)})
+		}
+	}
 	for j := 0; j < self.Ihdr.Height; j++ {
-		basePtr := j * lineBytes
+		basePtr := j * lineBytes // TODO fix
 		filterType := extracted[basePtr]
 		switch filterType {
 		}
+		break
 	}
 	return dst, nil
 }
