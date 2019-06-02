@@ -10,19 +10,7 @@ import (
 )
 
 func run() {
-	cfg := pixelgl.WindowConfig{
-		Title:  "png preview",
-		Bounds: pixel.R(0, 0, 1024, 768),
-	}
-	win, err := pixelgl.NewWindow(cfg)
-	if err != nil {
-		panic(err)
-	}
-	for !win.Closed() {
-		win.Update()
-	}
-}
-func main() {
+	// load image
 	var (
 		src = flag.String("src", "", "png filepath")
 	)
@@ -38,11 +26,27 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+	fmt.Println(data.Ihdr)
 	// TODO: show png image
 	// img, err := data.ToImage()
 	// if err != nil {
 	// 	fmt.Println(err)
 	// 	return
 	// }
+
+	// initialize window
+	cfg := pixelgl.WindowConfig{
+		Title:  "png preview",
+		Bounds: pixel.R(0, 0, float64(data.Ihdr.Width), float64(data.Ihdr.Height)),
+	}
+	win, err := pixelgl.NewWindow(cfg)
+	if err != nil {
+		panic(err)
+	}
+	for !win.Closed() {
+		win.Update()
+	}
+}
+func main() {
 	pixelgl.Run(run)
 }

@@ -24,37 +24,37 @@ const (
 )
 
 type Apng struct {
-	ihdr Ihdr
-	idat Idat
+	Ihdr Ihdr
+	Idat Idat
 }
 type Ihdr struct {
-	width     uint32
-	height    uint32
-	bitDepth  uint8
-	colorType uint8
-	compress  uint8
-	filter    uint8
-	interlace uint8
+	Width     int
+	Height    int
+	BitDepth  uint8
+	ColorType uint8
+	Compress  uint8
+	Filter    uint8
+	Interlace uint8
 }
 type Idat []uint8
 
 func (self *Apng) BitPerPixel() (uint8, error) {
-	switch self.ihdr.colorType {
+	switch self.Ihdr.ColorType {
 	case 0:
 		// grayscale
-		return self.ihdr.bitDepth, nil
+		return self.Ihdr.BitDepth, nil
 	case 2:
 		// true color
-		return self.ihdr.bitDepth * 3, nil
+		return self.Ihdr.BitDepth * 3, nil
 	case 3:
 		// index color
-		return self.ihdr.bitDepth, nil
+		return self.Ihdr.BitDepth, nil
 	case 4:
 		// grayscale(with alpha)
-		return self.ihdr.bitDepth * 2, nil
+		return self.Ihdr.BitDepth * 2, nil
 	case 6:
 		// true color(with alpha)
-		return self.ihdr.bitDepth * 4, nil
+		return self.Ihdr.BitDepth * 4, nil
 	default:
 		return 0, errors.New("colorTypeが正しくない")
 	}
@@ -63,24 +63,24 @@ func (self *Apng) parseIHDR(data []uint8) (err error) {
 	if len(data) != 13 {
 		return errors.New("IHDRのヘッダサイズは13でなければならない")
 	}
-	self.ihdr.width = binary.BigEndian.Uint32(data[0:4])
-	self.ihdr.height = binary.BigEndian.Uint32(data[4:8])
-	self.ihdr.bitDepth = data[8]
-	self.ihdr.colorType = data[9]
-	self.ihdr.compress = data[10]
-	self.ihdr.filter = data[11]
-	self.ihdr.interlace = data[12]
+	self.Ihdr.Width = int(binary.BigEndian.Uint32(data[0:4]))
+	self.Ihdr.Height = int(binary.BigEndian.Uint32(data[4:8]))
+	self.Ihdr.BitDepth = data[8]
+	self.Ihdr.ColorType = data[9]
+	self.Ihdr.Compress = data[10]
+	self.Ihdr.Filter = data[11]
+	self.Ihdr.Interlace = data[12]
 
 	return nil
 }
 func (self *Apng) parseIDAT(data []uint8) (err error) {
 	// IDATは
-	self.idat = append(self.idat, data...)
+	self.Idat = append(self.Idat, data...)
 	return nil
 }
 func (self *Apng) ToImage() (img image.Image, err error) {
 	// deflateめんどいしライブラリで許して
-	readBuf := bytes.NewBuffer(self.idat)
+	readBuf := bytes.NewBuffer(self.Idat)
 	zr, err := zlib.NewReader(readBuf)
 	if err != nil {
 		return nil, err
@@ -101,10 +101,10 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 	if err != nil {
 		return nil, err
 	}
-	lineBytes := int(bitPerPixel)*int(self.ihdr.width) + 1
+	lineBytes := int(bitPerPixel)*self.Ihdr.Width + 1
 	// filter処理をもとに戻す。scanlineごとのfilter-typeで分岐
-	dst := image.NewRGBA(image.Rect(0, 0, int(self.ihdr.width), int(self.ihdr.height)))
-	for j := 0; j < int(self.ihdr.height); j++ {
+	dst := image.NewRGBA(image.Rect(0, 0, self.Ihdr.Width, self.Ihdr.Height))
+	for j := 0; j < self.Ihdr.Height; j++ {
 		basePtr := j * lineBytes
 		filterType := extracted[basePtr]
 		switch filterType {
