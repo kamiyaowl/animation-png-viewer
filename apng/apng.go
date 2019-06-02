@@ -1,6 +1,8 @@
 package apng
 
 import (
+	"bytes"
+	"compress/zlib"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -11,6 +13,7 @@ import (
 
 type Image struct {
 	ihdr Ihdr
+	idat Idat
 }
 type Ihdr struct {
 	width     uint32
@@ -21,6 +24,7 @@ type Ihdr struct {
 	filter    uint8
 	interlace uint8
 }
+type Idat []uint8
 
 func (self *Image) parseIHDR(data []uint8) (err error) {
 	if len(data) != 13 {
@@ -37,7 +41,24 @@ func (self *Image) parseIHDR(data []uint8) (err error) {
 	return nil
 }
 func (self *Image) parseIDAT(data []uint8) (err error) {
-	// TODO: Implement here
+	// deflateめんどいしライブラリで許して
+	readBuf := bytes.NewBuffer(data)
+	zr, err := zlib.NewReader(readBuf)
+	if err != nil {
+		return err
+	}
+	defer zr.Close()
+
+	var dst bytes.Buffer
+	_, err = dst.ReadFrom(zr)
+	if err != nil {
+		return err
+	}
+	if len(self.idat) == 0 {
+		self.idat = dst.Bytes()
+	} else {
+		self.idat = append(self.idat, dst.Bytes()...)
+	}
 	return nil
 }
 
