@@ -158,7 +158,7 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 					topPixelValue = extracted[prevLinePixelPtr+c]
 				}
 				// すべては出揃った、あとはよしなにやってくれ
-				dstPtr := (j*self.Ihdr.Width + i) * int(bytePerPixel)
+				dstPtr := (j*self.Ihdr.Width+i)*int(bytePerPixel) + c
 				data, err := cancelFilter(targetValue, filterType, topPixelValue, leftPixelValue)
 				if err != nil {
 					return nil, err
