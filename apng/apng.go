@@ -158,7 +158,7 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 					topPixelValue = extracted[prevLinePixelPtr+c]
 				}
 				// すべては出揃った、あとはよしなにやってくれ
-				dstPtr := j*self.Ihdr.Width + i
+				dstPtr := (j*self.Ihdr.Width + i) * int(bytePerPixel)
 				data, err := cancelFilter(targetValue, filterType, topPixelValue, leftPixelValue)
 				if err != nil {
 					return nil, err
@@ -170,10 +170,23 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 	// できたデータをとりあえず画像にするね
 	// dstBuf->dst
 	dst := image.NewRGBA(image.Rect(0, 0, self.Ihdr.Width, self.Ihdr.Height))
-	// TODO: remove image testcode
-	for i := 0; i < self.Ihdr.Width; i++ {
-		for j := 0; j < self.Ihdr.Height; j++ {
-			dst.Set(i, j, color.RGBA{uint8(i % 255), uint8(j % 255), uint8((i + j) % 255), uint8(255)})
+	for j := 0; j < self.Ihdr.Height; j++ {
+		for i := 0; i < self.Ihdr.Width; i++ {
+			ptr := (j*self.Ihdr.Width + i) * int(bytePerPixel)
+			switch ColorType(self.Ihdr.ColorType) {
+			case GrayScale:
+				dst.SetRGBA(i, j, color.RGBA{dstBuf[ptr], dstBuf[ptr], dstBuf[ptr], uint8(255)})
+			case TrueColor:
+				dst.SetRGBA(i, j, color.RGBA{dstBuf[ptr], dstBuf[ptr+1], dstBuf[ptr+2], uint8(255)})
+			case IndexColor:
+				return nil, errors.New("IndexColorにはまだ非対応")
+			case GrayScaleWithAlpha:
+				dst.SetRGBA(i, j, color.RGBA{dstBuf[ptr], dstBuf[ptr], dstBuf[ptr], dstBuf[ptr+1]})
+			case TrueColorWithAlpha:
+				dst.SetRGBA(i, j, color.RGBA{dstBuf[ptr], dstBuf[ptr+1], dstBuf[ptr+2], dstBuf[ptr+3]})
+			default:
+				return nil, errors.New("IndexColorにはまだ非対応")
+			}
 		}
 	}
 	return dst, nil
