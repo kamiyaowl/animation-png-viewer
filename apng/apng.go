@@ -102,7 +102,7 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 	if err != nil {
 		return nil, err
 	}
-	lineBytes := int(bitPerPixel)*self.Ihdr.Width + 1
+	lineBytes := int(bitPerPixel)/8*self.Ihdr.Width + 1
 	// filter処理をもとに戻す。scanlineごとのfilter-typeで分岐
 	dst := image.NewRGBA(image.Rect(0, 0, self.Ihdr.Width, self.Ihdr.Height))
 	// TODO: remove image testcode
@@ -112,7 +112,7 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 		}
 	}
 	for j := 0; j < self.Ihdr.Height; j++ {
-		basePtr := j * lineBytes // TODO fix
+		basePtr := j * lineBytes
 		filterType := extracted[basePtr]
 		switch filterType {
 		}
