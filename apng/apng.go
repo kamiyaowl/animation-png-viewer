@@ -13,8 +13,18 @@ import (
 	"reflect"
 )
 
+type ColorType uint8
+
+const (
+	GrayScale          ColorType = 0
+	TrueColor          ColorType = 2
+	IndexColor         ColorType = 3
+	GrayScaleWithAlpha ColorType = 4
+	TrueColorWithAlpha ColorType = 6
+)
+
 // scanlineごとにある
-type FilterType int
+type FilterType uint8
 
 const (
 	None FilterType = iota
@@ -39,27 +49,28 @@ type Ihdr struct {
 }
 type Idat []uint8
 
-func (self *Apng) BitPerPixel() (uint8, error) {
-	switch self.Ihdr.ColorType {
-	case 0:
-		// grayscale
-		return self.Ihdr.BitDepth, nil
-	case 2:
-		// true color
-		return self.Ihdr.BitDepth * 3, nil
-	case 3:
-		// index color
-		return self.Ihdr.BitDepth, nil
-	case 4:
-		// grayscale(with alpha)
-		return self.Ihdr.BitDepth * 2, nil
-	case 6:
-		// true color(with alpha)
-		return self.Ihdr.BitDepth * 4, nil
+func (self *Apng) BytePerPixel() (uint8, error) {
+	switch ColorType(self.Ihdr.ColorType) {
+	case GrayScale:
+		return 1, nil
+	case TrueColor:
+		return 3, nil
+	case IndexColor:
+		return 1, nil
+	case GrayScaleWithAlpha:
+		return 2, nil
+	case TrueColorWithAlpha:
+		return 4, nil
 	default:
-		return 0, errors.New("colorTypeが正しくない")
+		return 0, errors.New("ColorTypeが正しくない")
 	}
 }
+
+// pngの圧縮用フィルタを解除します
+func cancelFilter(targetValue byte, filterType FilterType, topPixelValue byte, leftPixelValue byte) (byte, error) {
+
+}
+
 func (self *Apng) parseIHDR(data []uint8) (err error) {
 	if len(data) != 13 {
 		return errors.New("IHDRのヘッダサイズは13でなければならない")
@@ -98,25 +109,54 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 	if err != nil {
 		return nil, err
 	}
-	bitPerPixel, err := self.BitPerPixel()
+
+	// filter処理をもとに戻す。scanlineごとのfilter-typeで分岐
+	// extracted -> dstBuf
+	bytePerPixel, err := self.BytePerPixel()
 	if err != nil {
 		return nil, err
 	}
-	lineBytes := int(bitPerPixel)/8*self.Ihdr.Width + 1
-	// filter処理をもとに戻す。scanlineごとのfilter-typeで分岐
+	lineBytes := int(bytePerPixel)*self.Ihdr.Width + 1
+	dstBuf := make([]byte, self.Ihdr.Width*self.Ihdr.Height*int(bytePerPixel)) // ColorTypeに応じて格納してくれればいい
+	for j := 0; j < self.Ihdr.Height; j++ {
+		currentLinePtr := j * lineBytes
+		prevLinePtr := (j - 1) * lineBytes
+		filterType := FilterType(extracted[currentLinePtr])
+		// 水平方向のpixel単位でループ
+		for i := 0; i < self.Ihdr.Width; i++ {
+			// +1はfilterTypeを考慮
+			currentPixelPtr := currentLinePtr + 1 + i
+			prevPixelPtr := currentLinePtr + 1 + i - 1
+			prevLinePixelPtr := prevLinePtr + 1 + i
+			// pixelごとの色情報ごとにループ
+			for c := 0; c < int(bytePerPixel); c++ {
+				targetValue := extracted[currentPixelPtr+c]
+				topPixelValue := byte(0)
+				leftPixelValue := byte(0)
+				if i > 0 {
+					leftPixelValue = extracted[prevPixelPtr+c]
+				}
+				if j > 0 {
+					topPixelValue = extracted[prevLinePixelPtr+c]
+				}
+				// すべては出揃った、あとはよしなにやってくれ
+				dstPtr := j*self.Ihdr.Width + i
+				data, err := cancelFilter(targetValue, filterType, topPixelValue, leftPixelValue)
+				if err != nil {
+					return nil, err
+				}
+				dstBuf[dstPtr] = data
+			}
+		}
+	}
+	// できたデータをとりあえず画像にするね
+	// dstBuf->dst
 	dst := image.NewRGBA(image.Rect(0, 0, self.Ihdr.Width, self.Ihdr.Height))
 	// TODO: remove image testcode
 	for i := 0; i < self.Ihdr.Width; i++ {
 		for j := 0; j < self.Ihdr.Height; j++ {
 			dst.Set(i, j, color.RGBA{uint8(i % 255), uint8(j % 255), uint8((i + j) % 255), uint8(255)})
 		}
-	}
-	for j := 0; j < self.Ihdr.Height; j++ {
-		basePtr := j * lineBytes
-		filterType := extracted[basePtr]
-		switch filterType {
-		}
-		break
 	}
 	return dst, nil
 }
