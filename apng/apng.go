@@ -68,7 +68,25 @@ func (self *Apng) BytePerPixel() (uint8, error) {
 
 // pngの圧縮用フィルタを解除します
 func cancelFilter(targetValue byte, filterType FilterType, topPixelValue byte, leftPixelValue byte) (byte, error) {
-
+	switch filterType {
+	case None:
+		return targetValue, nil
+	case Sub:
+		data := byte((int(targetValue) + int(leftPixelValue)) % 256)
+		return data, nil
+	case Up:
+		data := byte((int(targetValue) + int(topPixelValue)) % 256)
+		return data, nil
+	case Average:
+		avg := (int(leftPixelValue) + int(topPixelValue)) / 2
+		data := byte((int(targetValue) + avg) % 256)
+		return data, nil
+	case Paeth:
+		// TODO: Implement here
+		return targetValue, nil
+	default:
+		return 0, errors.New("FilterTypeが正しくない")
+	}
 }
 
 func (self *Apng) parseIHDR(data []uint8) (err error) {
