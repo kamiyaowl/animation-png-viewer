@@ -135,7 +135,10 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 		return nil, err
 	}
 	lineBytes := int(bytePerPixel)*self.Ihdr.Width + 1
-	dstBuf := make([]byte, self.Ihdr.Width*self.Ihdr.Height*int(bytePerPixel)) // ColorTypeに応じて格納してくれればいい
+	dstBufSize := self.Ihdr.Width * self.Ihdr.Height * int(bytePerPixel)
+	dstBuf := make([]byte, dstBufSize) // ColorTypeに応じて格納してくれればいい
+	fmt.Printf("len(extracted):%v\tbytePerPixel:%v\tlineBytes:%v\tdstBufSize:%v\t(lineBytes*height):%v\n", len(extracted), bytePerPixel, lineBytes, dstBufSize, lineBytes*self.Ihdr.Height)
+
 	for j := 0; j < self.Ihdr.Height; j++ {
 		currentLinePtr := j * lineBytes
 		prevLinePtr := (j - 1) * lineBytes
