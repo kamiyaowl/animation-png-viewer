@@ -164,6 +164,8 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 					return nil, err
 				}
 				dstBuf[dstPtr] = data
+				// fmt.Printf("j:%v\ti:%v\tc:%v\tdstPtr:%v\t", j, i, c, dstPtr)
+				// fmt.Printf("currentPixelPtr:%v\tprevPixelPtr:%v\tprevLinePixelPtr:%v\n", currentPixelPtr, prevPixelPtr, prevLinePixelPtr)
 			}
 		}
 	}
@@ -173,6 +175,8 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 	for j := 0; j < self.Ihdr.Height; j++ {
 		for i := 0; i < self.Ihdr.Width; i++ {
 			ptr := (j*self.Ihdr.Width + i) * int(bytePerPixel)
+			// fmt.Printf("j:%v\ti:%v\tptr:%v\n", j, i, ptr)
+
 			switch ColorType(self.Ihdr.ColorType) {
 			case GrayScale:
 				dst.SetRGBA(i, j, color.RGBA{dstBuf[ptr], dstBuf[ptr], dstBuf[ptr], uint8(255)})

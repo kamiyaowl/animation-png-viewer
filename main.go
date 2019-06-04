@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/jpeg"
 	"os"
 
 	"./apng"
@@ -28,16 +29,17 @@ func loadPicture(path string) (pixel.Picture, error) {
 func run() {
 	// parse args
 	var (
-		src = flag.String("src", "", "png filepath")
+		srcPath = flag.String("src", "", "png filepath")
+		outPath = flag.String("out", "", "jpeg output")
 	)
 	flag.Parse()
-	if *src == "" {
+	if *srcPath == "" {
 		fmt.Println("srcオプションで読み込むファイルを指定してください。 例: -src <filepath>")
 		return
 	}
 	// load image
 	data := apng.Apng{}
-	err := data.Parse(*src)
+	err := data.Parse(*srcPath)
 	if err != nil {
 		panic(err)
 	}
@@ -46,8 +48,15 @@ func run() {
 	if err != nil {
 		panic(err)
 	}
-	// TODO: TEST
-
+	// save image
+	if *outPath != "" {
+		f, err := os.Create(*outPath)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		jpeg.Encode(f, img, nil)
+	}
 	// initialize window
 	cfg := pixelgl.WindowConfig{
 		Title:  "Preview image",
