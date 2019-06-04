@@ -146,9 +146,9 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 		// 水平方向のpixel単位でループ
 		for i := 0; i < self.Ihdr.Width; i++ {
 			// +1はfilterTypeを考慮
-			currentPixelPtr := currentLinePtr + 1 + i
-			prevPixelPtr := currentLinePtr + 1 + i - 1
-			prevLinePixelPtr := prevLinePtr + 1 + i
+			currentPixelPtr := currentLinePtr + 1 + (i * int(bytePerPixel))
+			prevPixelPtr := currentLinePtr + 1 + ((i - 1) * int(bytePerPixel))
+			prevLinePixelPtr := prevLinePtr + 1 + (i * int(bytePerPixel))
 			// pixelごとの色情報ごとにループ
 			for c := 0; c < int(bytePerPixel); c++ {
 				targetValue := extracted[currentPixelPtr+c]
