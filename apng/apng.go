@@ -104,7 +104,6 @@ func (self *Apng) parseIHDR(data []uint8) (err error) {
 	return nil
 }
 func (self *Apng) parseIDAT(data []uint8) (err error) {
-	// IDATは
 	self.Idat = append(self.Idat, data...)
 	return nil
 }
