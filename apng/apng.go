@@ -9,6 +9,7 @@ import (
 	"hash/crc32"
 	"image"
 	"image/color"
+	"math"
 	"os"
 	"reflect"
 )
@@ -66,6 +67,21 @@ func (self *Apng) BytePerPixel() (uint8, error) {
 	}
 }
 
+// 一番親しい色を加算する
+func paethPredictor(target byte, top byte, left byte) byte {
+	p := float64(int(target) + int(top) - int(left))
+	pTarget := math.Abs(p - float64(target))
+	pTop := math.Abs(p - float64(top))
+	pLeft := math.Abs(p - float64(left))
+	if pTarget <= pTop && pTarget <= pLeft {
+		return target
+	} else if pTop <= pLeft {
+		return top
+	} else {
+		return left
+	}
+}
+
 // pngの圧縮用フィルタを解除します
 func cancelFilter(targetValue byte, filterType FilterType, topPixelValue byte, leftPixelValue byte) (byte, error) {
 	switch filterType {
@@ -82,8 +98,9 @@ func cancelFilter(targetValue byte, filterType FilterType, topPixelValue byte, l
 		data := byte((int(targetValue) + avg) % 256)
 		return data, nil
 	case Paeth:
-		// TODO: Implement here
-		return targetValue, nil
+		paeth := paethPredictor(targetValue, topPixelValue, leftPixelValue)
+		data := byte((int(targetValue) + int(paeth)) % 256)
+		return data, nil
 	default:
 		return 0, errors.New("FilterTypeが正しくない")
 	}
@@ -271,6 +288,9 @@ func (self *Apng) Parse(src string) (err error) {
 		case "IEND":
 			isReadIend = true
 			break
+		case "acTL":
+		case "fcTL":
+		case "fdAT":
 		default:
 			fmt.Printf("%sは未実装ヘッダです\n", chunkType)
 			err = nil

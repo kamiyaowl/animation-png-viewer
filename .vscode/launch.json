@@ -13,7 +13,7 @@
             "env": {},
             "args": [
                 "-src",
-                "sample_data/PNG_transparency_demonstration_1.png",
+                "sample_data/elephant_apng_zopfli.png",
                 "-out",
                 "tmp.jpg",
             ]
