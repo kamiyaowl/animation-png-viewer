@@ -36,9 +36,11 @@ const (
 )
 
 type Apng struct {
-	Ihdr Ihdr
-	Idat Idat
-	Fdat []Fdat
+	Ihdr   Ihdr
+	Idat   Idat
+	Fdat   []Fdat // Fdat[0].FrameDataは使わずにIDATを見ろ
+	Actl   Actl
+	IsApng bool
 }
 type Ihdr struct {
 	Width     int
@@ -74,6 +76,8 @@ const (
 
 // Frame Control
 type Fctl struct {
+	IsWritten bool // Frame1はfcTLが指定されない場合があるのでその検出用
+
 	SequenceNumber uint32
 	Width          uint32
 	Height         uint32
@@ -165,6 +169,53 @@ func (self *Apng) parseIDAT(data []uint8) (err error) {
 	self.Idat = append(self.Idat, data...)
 	return nil
 }
+func (self *Apng) parseACTL(data []uint8) (err error) {
+	if len(self.Idat) > 0 {
+		return errors.New("acTL chunkはIDATより前になければいけない")
+	}
+	if len(data) != 8 {
+		return errors.New("acTLのヘッダサイズは8でなければならない")
+	}
+	self.IsApng = true
+	self.Actl.NumFrames = binary.BigEndian.Uint32(data[0:4])
+	self.Actl.NumPlays = binary.BigEndian.Uint32(data[4:8])
+	// 事前にfdATの領域を確保しておく
+	self.Fdat = make([]Fdat, self.Actl.NumFrames)
+
+	return nil
+}
+func (self *Apng) parseFCTL(data []uint8) (err error) {
+	if len(data) != 26 {
+		return errors.New("fcTLのヘッダサイズは26でなければならない")
+	}
+	seqNumber := binary.BigEndian.Uint32(data[0:4])
+	if seqNumber >= self.Actl.NumFrames {
+		return errors.New("fcTLのsequence_numberがacTLのNumFramesを超えています")
+	}
+	self.Fdat[seqNumber].Fctl.IsWritten = true
+	self.Fdat[seqNumber].Fctl.SequenceNumber = seqNumber
+	self.Fdat[seqNumber].Fctl.Width = binary.BigEndian.Uint32(data[4:8])
+	self.Fdat[seqNumber].Fctl.Height = binary.BigEndian.Uint32(data[8:12])
+	self.Fdat[seqNumber].Fctl.OffsetX = binary.BigEndian.Uint32(data[12:16])
+	self.Fdat[seqNumber].Fctl.OffsetY = binary.BigEndian.Uint32(data[16:20])
+	self.Fdat[seqNumber].Fctl.DelayNum = binary.BigEndian.Uint16(data[20:22])
+	self.Fdat[seqNumber].Fctl.DelayDen = binary.BigEndian.Uint16(data[22:24])
+	self.Fdat[seqNumber].Fctl.DisposeOp = data[24]
+	self.Fdat[seqNumber].Fctl.BlendOp = data[25]
+	return nil
+}
+func (self *Apng) parseFDAT(data []uint8) (err error) {
+	seqNumber := binary.BigEndian.Uint32(data[0:4])
+	if seqNumber >= self.Actl.NumFrames {
+		return errors.New("fdATのsequence_numberがacTLのNumFramesを超えています")
+	}
+	if seqNumber == 0 {
+		return errors.New("fdATのsequence_number=1は指定されません。IDATで定義されるはず")
+	}
+	self.Fdat[seqNumber].FrameData = append(self.Fdat[seqNumber].FrameData, data...)
+	return nil
+}
+
 func (self *Apng) ToImage() (img image.Image, err error) {
 	// deflateめんどいしライブラリで許して
 	readBuf := bytes.NewBuffer(self.Idat)
@@ -277,6 +328,8 @@ func (self *Apng) Parse(src string) (err error) {
 	if !reflect.DeepEqual(validSignature, signature) {
 		return errors.New("pngファイルではない")
 	}
+	// apngかどうかはacTLがIDATより前に来るかで決まる
+	self.IsApng = false
 	// read chunks
 	isReadIhdr := false
 	isReadIdat := false
@@ -330,8 +383,11 @@ func (self *Apng) Parse(src string) (err error) {
 			isReadIend = true
 			break
 		case "acTL":
+			err = self.parseACTL(dataBuf)
 		case "fcTL":
+			err = self.parseFCTL(dataBuf)
 		case "fdAT":
+			err = self.parseFDAT(dataBuf)
 		default:
 			fmt.Printf("%sは未実装ヘッダです\n", chunkType)
 			err = nil
