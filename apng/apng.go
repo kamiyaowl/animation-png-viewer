@@ -38,7 +38,8 @@ const (
 type Apng struct {
 	Ihdr   Ihdr
 	Idat   Idat
-	Fdat   []Fdat // Fdat[0].FrameDataは使わずにIDATを見ろ
+	Fctl   []Fctl
+	Fdat   []Fdat
 	Actl   Actl
 	IsApng bool
 }
@@ -76,8 +77,6 @@ const (
 
 // Frame Control
 type Fctl struct {
-	IsWritten bool // Frame1はfcTLが指定されない場合があるのでその検出用
-
 	SequenceNumber uint32
 	Width          uint32
 	Height         uint32
@@ -91,8 +90,8 @@ type Fctl struct {
 
 // FrameData, sequence numberは配列で管理した時のインデックスにする
 type Fdat struct {
-	Fctl      Fctl
-	FrameData Idat
+	SequenceNumber uint32
+	FrameData      Idat
 }
 
 func (self *Apng) BytePerPixel() (uint8, error) {
@@ -179,8 +178,6 @@ func (self *Apng) parseACTL(data []uint8) (err error) {
 	self.IsApng = true
 	self.Actl.NumFrames = binary.BigEndian.Uint32(data[0:4])
 	self.Actl.NumPlays = binary.BigEndian.Uint32(data[4:8])
-	// 事前にfdATの領域を確保しておく
-	self.Fdat = make([]Fdat, self.Actl.NumFrames)
 
 	return nil
 }
@@ -188,31 +185,37 @@ func (self *Apng) parseFCTL(data []uint8) (err error) {
 	if len(data) != 26 {
 		return errors.New("fcTLのヘッダサイズは26でなければならない")
 	}
-	seqNumber := binary.BigEndian.Uint32(data[0:4])
-	if seqNumber >= self.Actl.NumFrames {
-		return errors.New("fcTLのsequence_numberがacTLのNumFramesを超えています")
-	}
-	self.Fdat[seqNumber].Fctl.IsWritten = true
-	self.Fdat[seqNumber].Fctl.SequenceNumber = seqNumber
-	self.Fdat[seqNumber].Fctl.Width = binary.BigEndian.Uint32(data[4:8])
-	self.Fdat[seqNumber].Fctl.Height = binary.BigEndian.Uint32(data[8:12])
-	self.Fdat[seqNumber].Fctl.OffsetX = binary.BigEndian.Uint32(data[12:16])
-	self.Fdat[seqNumber].Fctl.OffsetY = binary.BigEndian.Uint32(data[16:20])
-	self.Fdat[seqNumber].Fctl.DelayNum = binary.BigEndian.Uint16(data[20:22])
-	self.Fdat[seqNumber].Fctl.DelayDen = binary.BigEndian.Uint16(data[22:24])
-	self.Fdat[seqNumber].Fctl.DisposeOp = data[24]
-	self.Fdat[seqNumber].Fctl.BlendOp = data[25]
+	var fctl Fctl
+	fctl.SequenceNumber = binary.BigEndian.Uint32(data[0:4])
+	fctl.Width = binary.BigEndian.Uint32(data[4:8])
+	fctl.Height = binary.BigEndian.Uint32(data[8:12])
+	fctl.OffsetX = binary.BigEndian.Uint32(data[12:16])
+	fctl.OffsetY = binary.BigEndian.Uint32(data[16:20])
+	fctl.DelayNum = binary.BigEndian.Uint16(data[20:22])
+	fctl.DelayDen = binary.BigEndian.Uint16(data[22:24])
+	fctl.DisposeOp = data[24]
+	fctl.BlendOp = data[25]
+
+	self.Fctl = append(self.Fctl, fctl)
+
 	return nil
 }
 func (self *Apng) parseFDAT(data []uint8) (err error) {
 	seqNumber := binary.BigEndian.Uint32(data[0:4])
-	if seqNumber >= self.Actl.NumFrames {
-		return errors.New("fdATのsequence_numberがacTLのNumFramesを超えています")
+	// すでにある場合は追記する
+	for _, v := range self.Fdat {
+		if v.SequenceNumber == seqNumber {
+			v.FrameData = append(v.FrameData, data[4:]...)
+			return nil
+		}
 	}
-	if seqNumber == 0 {
-		return errors.New("fdATのsequence_number=1は指定されません。IDATで定義されるはず")
-	}
-	self.Fdat[seqNumber].FrameData = append(self.Fdat[seqNumber].FrameData, data...)
+	// なければ作って付け足そう
+	var fdat Fdat
+	fdat.SequenceNumber = seqNumber
+	fdat.FrameData = data[4:]
+
+	self.Fdat = append(self.Fdat, fdat)
+
 	return nil
 }
 
