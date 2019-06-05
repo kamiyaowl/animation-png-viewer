@@ -38,6 +38,7 @@ const (
 type Apng struct {
 	Ihdr Ihdr
 	Idat Idat
+	Fdat []Fdat
 }
 type Ihdr struct {
 	Width     int
@@ -49,6 +50,46 @@ type Ihdr struct {
 	Interlace uint8
 }
 type Idat []uint8
+
+// Animation Control
+type Actl struct {
+	NumFrames uint32
+	NumPlays  uint32 // 0が指定されたら無限ループ
+}
+
+type DisposeOp uint8
+
+const (
+	OpNone       DisposeOp = iota
+	OpBackground           // 透明な黒で上書き
+	OpPrevious             // 次のフレームに映るときに、前のフレームの状態に戻す
+)
+
+type BlendOp uint8
+
+const (
+	OpSource BlendOp = iota // バッファに上書き
+	OpOver                  // アルファブレンディング合成する
+)
+
+// Frame Control
+type Fctl struct {
+	SequenceNumber uint32
+	Width          uint32
+	Height         uint32
+	OffsetX        uint32
+	OffsetY        uint32
+	DelayNum       uint16 // Frame Delayの分子
+	DelayDen       uint16 // Frame Delayの分母
+	DisposeOp      uint8
+	BlendOp        uint8
+}
+
+// FrameData, sequence numberは配列で管理した時のインデックスにする
+type Fdat struct {
+	Fctl      Fctl
+	FrameData Idat
+}
 
 func (self *Apng) BytePerPixel() (uint8, error) {
 	switch ColorType(self.Ihdr.ColorType) {
