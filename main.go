@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"image"
 	"image/jpeg"
 	"os"
 
@@ -13,44 +12,22 @@ import (
 	"golang.org/x/image/colornames"
 )
 
-func loadPicture(path string) (pixel.Picture, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	img, _, err := image.Decode(file)
-	if err != nil {
-		return nil, err
-	}
-	return pixel.PictureDataFromImage(img), nil
+// アニメーションを出したい
+func showAnimation(data *apng.Apng) {
+	showImage(data, "")
+
 }
 
-func run() {
-	// parse args
-	var (
-		srcPath = flag.String("src", "", "png filepath")
-		outPath = flag.String("out", "", "jpeg output")
-	)
-	flag.Parse()
-	if *srcPath == "" {
-		fmt.Println("srcオプションで読み込むファイルを指定してください。 例: -src <filepath>")
-		return
-	}
-	// load image
-	data := apng.Apng{}
-	err := data.Parse(*srcPath)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(data.Ihdr)
+// アニメーションじゃないとき
+func showImage(data *apng.Apng, outPath string) {
+	// decode idat
 	img, err := data.ToImage()
 	if err != nil {
 		panic(err)
 	}
 	// save image
-	if *outPath != "" {
-		f, err := os.Create(*outPath)
+	if outPath != "" {
+		f, err := os.Create(outPath)
 		if err != nil {
 			panic(err)
 		}
@@ -75,6 +52,32 @@ func run() {
 
 	for !win.Closed() {
 		win.Update()
+	}
+}
+func run() {
+	// parse args
+	var (
+		srcPath = flag.String("src", "", "png filepath")
+		outPath = flag.String("out", "", "jpeg output, アニメーションのときは無効です")
+	)
+	flag.Parse()
+	if *srcPath == "" {
+		fmt.Println("srcオプションで読み込むファイルを指定してください。 例: -src <filepath>")
+		return
+	}
+	// load image
+	data := apng.Apng{}
+	err := data.Parse(*srcPath)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(data.Ihdr)
+
+	switch data.IsApng {
+	case true:
+		showAnimation(&data)
+	case false:
+		showImage(&data, *outPath)
 	}
 }
 func main() {

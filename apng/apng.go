@@ -231,6 +231,16 @@ func (self *Apng) parseFDAT(data []uint8) (err error) {
 // Animation PNGとして定義されているすべての画像を生成します
 // acTL chunkがない場合は、IDATの画像一枚を返します
 func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
+	if !self.IsApng {
+		img, err := self.ToImage()
+		if err != nil {
+			return nil, err
+		}
+		ret := make([]AnimationData, 1)
+		ret[0].DelaySeconds = 1.0
+		ret[0].Image = img
+		return ret, nil
+	}
 	return nil, nil
 }
 func (idat *Idat) ToImage(width int, height int, colorType ColorType) (image.Image, error) {
