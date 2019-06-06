@@ -94,8 +94,14 @@ type Fdat struct {
 	FrameData      Idat
 }
 
-func (self *Apng) BytePerPixel() (uint8, error) {
-	switch ColorType(self.Ihdr.ColorType) {
+// アニメーション生成用
+type AnimationData struct {
+	Image        image.Image
+	DelaySeconds float32
+}
+
+func BytePerPixel(colorType ColorType) (uint8, error) {
+	switch colorType {
 	case GrayScale:
 		return 1, nil
 	case TrueColor:
@@ -109,6 +115,9 @@ func (self *Apng) BytePerPixel() (uint8, error) {
 	default:
 		return 0, errors.New("ColorTypeが正しくない")
 	}
+}
+func (self *Apng) BytePerPixel() (uint8, error) {
+	return BytePerPixel(ColorType(self.Ihdr.ColorType))
 }
 
 // 一番親しい色を加算する
@@ -219,9 +228,14 @@ func (self *Apng) parseFDAT(data []uint8) (err error) {
 	return nil
 }
 
-func (self *Apng) ToImage() (img image.Image, err error) {
+// Animation PNGとして定義されているすべての画像を生成します
+// acTL chunkがない場合は、IDATの画像一枚を返します
+func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
+	return nil, nil
+}
+func (idat *Idat) ToImage(width int, height int, colorType ColorType) (image.Image, error) {
 	// deflateめんどいしライブラリで許して
-	readBuf := bytes.NewBuffer(self.Idat)
+	readBuf := bytes.NewBuffer(*idat)
 	zr, err := zlib.NewReader(readBuf)
 	if err != nil {
 		return nil, err
@@ -241,21 +255,20 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 
 	// filter処理をもとに戻す。scanlineごとのfilter-typeで分岐
 	// extracted -> dstBuf
-	bytePerPixel, err := self.BytePerPixel()
+	bytePerPixel, err := BytePerPixel(colorType)
 	if err != nil {
 		return nil, err
 	}
-	lineBytes := int(bytePerPixel)*self.Ihdr.Width + 1
-	dstBufSize := self.Ihdr.Width * self.Ihdr.Height * int(bytePerPixel)
+	lineBytes := int(bytePerPixel)*width + 1
+	dstBufSize := width * height * int(bytePerPixel)
 	dstBuf := make([]byte, dstBufSize) // ColorTypeに応じて格納してくれればいい
-	fmt.Printf("len(extracted):%v\tbytePerPixel:%v\tlineBytes:%v\tdstBufSize:%v\t(lineBytes*height):%v\n", len(extracted), bytePerPixel, lineBytes, dstBufSize, lineBytes*self.Ihdr.Height)
 
-	for j := 0; j < self.Ihdr.Height; j++ {
+	for j := 0; j < height; j++ {
 		currentLinePtr := j * lineBytes
 		prevLinePtr := (j - 1) * lineBytes
 		filterType := FilterType(extracted[currentLinePtr])
 		// 水平方向のpixel単位でループ
-		for i := 0; i < self.Ihdr.Width; i++ {
+		for i := 0; i < width; i++ {
 			// +1はfilterTypeを考慮
 			currentPixelPtr := currentLinePtr + 1 + (i * int(bytePerPixel))
 			prevPixelPtr := currentLinePtr + 1 + ((i - 1) * int(bytePerPixel))
@@ -272,26 +285,24 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 					topPixelValue = extracted[prevLinePixelPtr+c]
 				}
 				// すべては出揃った、あとはよしなにやってくれ
-				dstPtr := (j*self.Ihdr.Width+i)*int(bytePerPixel) + c
+				dstPtr := (j*width+i)*int(bytePerPixel) + c
 				data, err := cancelFilter(targetValue, filterType, topPixelValue, leftPixelValue)
 				if err != nil {
 					return nil, err
 				}
 				dstBuf[dstPtr] = data
-				// fmt.Printf("j:%v\ti:%v\tc:%v\tdstPtr:%v\t", j, i, c, dstPtr)
-				// fmt.Printf("currentPixelPtr:%v\tprevPixelPtr:%v\tprevLinePixelPtr:%v\n", currentPixelPtr, prevPixelPtr, prevLinePixelPtr)
 			}
 		}
 	}
 	// できたデータをとりあえず画像にするね
 	// dstBuf->dst
-	dst := image.NewRGBA(image.Rect(0, 0, self.Ihdr.Width, self.Ihdr.Height))
-	for j := 0; j < self.Ihdr.Height; j++ {
-		for i := 0; i < self.Ihdr.Width; i++ {
-			ptr := (j*self.Ihdr.Width + i) * int(bytePerPixel)
+	dst := image.NewRGBA(image.Rect(0, 0, width, height))
+	for j := 0; j < height; j++ {
+		for i := 0; i < width; i++ {
+			ptr := (j*width + i) * int(bytePerPixel)
 			// fmt.Printf("j:%v\ti:%v\tptr:%v\n", j, i, ptr)
 
-			switch ColorType(self.Ihdr.ColorType) {
+			switch colorType {
 			case GrayScale:
 				dst.SetRGBA(i, j, color.RGBA{dstBuf[ptr], dstBuf[ptr], dstBuf[ptr], uint8(255)})
 			case TrueColor:
@@ -308,6 +319,10 @@ func (self *Apng) ToImage() (img image.Image, err error) {
 		}
 	}
 	return dst, nil
+}
+
+func (self *Apng) ToImage() (img image.Image, err error) {
+	return self.Idat.ToImage(self.Ihdr.Width, self.Ihdr.Height, ColorType(self.Ihdr.ColorType))
 }
 
 func (self *Apng) Parse(src string) (err error) {
