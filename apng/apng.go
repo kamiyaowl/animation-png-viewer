@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"sort"
 )
 
 type ColorType uint8
@@ -36,12 +37,13 @@ const (
 )
 
 type Apng struct {
-	Ihdr   Ihdr
-	Idat   Idat
-	Fctl   []Fctl
-	Fdat   []Fdat
-	Actl   Actl
-	IsApng bool
+	Ihdr            Ihdr
+	Idat            Idat
+	Fctl            []Fctl
+	Fdat            []Fdat
+	Actl            Actl
+	IsApng          bool
+	UseDefaultImage bool // IDATより前にfcTLがあった場合、IDATが画像0になる
 }
 type Ihdr struct {
 	Width     int
@@ -78,8 +80,8 @@ const (
 // Frame Control
 type Fctl struct {
 	SequenceNumber uint32
-	Width          uint32
-	Height         uint32
+	Width          int
+	Height         int
 	OffsetX        uint32
 	OffsetY        uint32
 	DelayNum       uint16 // Frame Delayの分子
@@ -196,8 +198,8 @@ func (self *Apng) parseFCTL(data []uint8) (err error) {
 	}
 	var fctl Fctl
 	fctl.SequenceNumber = binary.BigEndian.Uint32(data[0:4])
-	fctl.Width = binary.BigEndian.Uint32(data[4:8])
-	fctl.Height = binary.BigEndian.Uint32(data[8:12])
+	fctl.Width = int(binary.BigEndian.Uint32(data[4:8]))
+	fctl.Height = int(binary.BigEndian.Uint32(data[8:12]))
 	fctl.OffsetX = binary.BigEndian.Uint32(data[12:16])
 	fctl.OffsetY = binary.BigEndian.Uint32(data[16:20])
 	fctl.DelayNum = binary.BigEndian.Uint16(data[20:22])
@@ -231,6 +233,7 @@ func (self *Apng) parseFDAT(data []uint8) (err error) {
 // Animation PNGとして定義されているすべての画像を生成します
 // acTL chunkがない場合は、IDATの画像一枚を返します
 func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
+	// apngでなければ先頭画像だけ返す
 	if !self.IsApng {
 		img, err := self.ToImage()
 		if err != nil {
@@ -241,6 +244,61 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 		ret[0].Image = img
 		return ret, nil
 	}
+	// sequence_numberを小さい順にしておかないとマージソートできない
+	sort.Slice(self.Fdat, func(i, j int) bool { return self.Fdat[i].SequenceNumber < self.Fdat[j].SequenceNumber })
+	sort.Slice(self.Fctl, func(i, j int) bool { return self.Fctl[i].SequenceNumber < self.Fctl[j].SequenceNumber })
+	// fdATは元のフレームサイズと一致しているとは限らないためとりあえずすべて画像にする
+	initialImage := image.NewRGBA(image.Rect(0, 0, self.Ihdr.Width, self.Ihdr.Height))
+	var currentFcTL Fctl
+	// sequence_numberが小さい順になめていく,マージソート的なあれで
+	numOfSeq := len(self.Fctl) + len(self.Fdat)
+	fcTLPtr := 0
+	fdATPtr := 0
+	for i := 0; i < numOfSeq; i++ {
+		isFdDATProcess := false
+
+		fcTLSeqNum := -1
+		if fcTLPtr < len(self.Fctl) {
+			fcTLSeqNum = int(self.Fctl[fcTLPtr].SequenceNumber)
+		}
+		fdATSeqNum := -1
+		if fdATPtr < len(self.Fdat) {
+			fcTLSeqNum = int(self.Fdat[fdATPtr].SequenceNumber)
+		}
+		if fcTLSeqNum == -1 && fdATSeqNum == -1 {
+			// 全部なめ終わった
+			break
+		} else if fcTLSeqNum == -1 {
+			// 最後のfdAT
+			isFdDATProcess = true
+		} else if fdATSeqNum == -1 {
+			// 最後のfcTL→ありえないはず
+			return nil, errors.New("fdATと関連付けが取れていないfcTLを検出しました")
+		} else {
+			if fcTLSeqNum == fdATSeqNum {
+				// 同じシーケンス番号にはならない
+				return nil, errors.New("fcTLとfdATのsequence_numberで競合が発生しました")
+			} else if fcTLSeqNum < fdATSeqNum {
+				currentFcTL = self.Fctl[fcTLPtr]
+				fcTLPtr++
+			} else {
+				isFdDATProcess = true
+			}
+		}
+		// 今のcurrentFcTLとfdATPtrのデータで画像を作る
+		if isFdDATProcess {
+			// blendOpによっては前前回フレームの画像を保持する必要がある点に注意
+			img, err := self.Fdat[fdATPtr].FrameData.ToImage(currentFcTL.Width, currentFcTL.Height, ColorType(self.Ihdr.ColorType))
+			if err != nil {
+				return nil, err
+			}
+			// imgとfcTL情報を使って画像合成する
+
+			fdATPtr++
+		}
+
+	}
+
 	return nil, nil
 }
 func (idat *Idat) ToImage(width int, height int, colorType ColorType) (image.Image, error) {
@@ -358,6 +416,7 @@ func (self *Apng) Parse(src string) (err error) {
 	}
 	// apngかどうかはacTLがIDATより前に来るかで決まる
 	self.IsApng = false
+	self.UseDefaultImage = false
 	// read chunks
 	isReadIhdr := false
 	isReadIdat := false
@@ -413,6 +472,12 @@ func (self *Apng) Parse(src string) (err error) {
 		case "acTL":
 			err = self.parseACTL(dataBuf)
 		case "fcTL":
+			// IDATより前に定義された場合は、IDATがFrame0になる
+			if !isReadIdat {
+				self.UseDefaultImage = true
+			} else {
+				self.UseDefaultImage = false
+			}
 			err = self.parseFCTL(dataBuf)
 		case "fdAT":
 			err = self.parseFDAT(dataBuf)
