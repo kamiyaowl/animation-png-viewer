@@ -268,6 +268,7 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 	numOfSeq := len(self.Fctl) + len(self.Fdat)
 	fcTLPtr := 0
 	fdATPtr := 0
+	idatUsed := self.UseDefaultImage // IDATの手前にfcTLがない(=IDATはプレビュー専用のため)、DefaultImageとして消費されたとしてtrue
 	for i := 0; i < numOfSeq; i++ {
 		isFdDATProcess := false
 
@@ -301,8 +302,13 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 		}
 		// 今のcurrentFcTLとfdATPtrのデータで画像を作る
 		if isFdDATProcess {
-			// blendOpによっては前前回フレームの画像を保持する必要がある点に注意
-			fdatImage, err := self.Fdat[fdATPtr].FrameData.ToImage(currentFcTL.Width, currentFcTL.Height, ColorType(self.Ihdr.ColorType))
+			var fdatImage image.Image
+			var err error
+			if !idatUsed {
+				fdatImage, err = self.ToImage()
+			} else {
+				fdatImage, err = self.Fdat[fdATPtr].FrameData.ToImage(currentFcTL.Width, currentFcTL.Height, ColorType(self.Ihdr.ColorType))
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -335,10 +341,14 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 			// TODO: 設定によって、beforeImageにデータを設定
 
 			// TODO: remove debug save image
-			saveJpg(currentImage, fmt.Sprintf("%04d_debug.jpg", fdATPtr))
+			saveJpg(currentImage, fmt.Sprintf("debug_image/idat_%v_%04d_debug.jpg", idatUsed, fdATPtr))
 
-			// fdATのインクリ
-			fdATPtr++
+			// fdATのインクリ(Idatを使った場合はインクリしない)
+			if !idatUsed {
+				idatUsed = true
+			} else {
+				fdATPtr++
+			}
 
 		}
 
