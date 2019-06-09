@@ -9,6 +9,8 @@ import (
 	"hash/crc32"
 	"image"
 	"image/color"
+	"image/draw"
+	"image/jpeg" // for debug
 	"math"
 	"os"
 	"reflect"
@@ -100,6 +102,18 @@ type Fdat struct {
 type AnimationData struct {
 	Image        image.Image
 	DelaySeconds float32
+}
+
+// imageをjpegで保存します
+func saveJpg(img image.Image, outPath string) error {
+	f, err := os.Create(outPath)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	jpeg.Encode(f, img, nil)
+
+	return nil
 }
 
 func BytePerPixel(colorType ColorType) (uint8, error) {
@@ -248,8 +262,8 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 	sort.Slice(self.Fdat, func(i, j int) bool { return self.Fdat[i].SequenceNumber < self.Fdat[j].SequenceNumber })
 	sort.Slice(self.Fctl, func(i, j int) bool { return self.Fctl[i].SequenceNumber < self.Fctl[j].SequenceNumber })
 	// fdATは元のフレームサイズと一致しているとは限らないためとりあえずすべて画像にする
-	initialImage := image.NewRGBA(image.Rect(0, 0, self.Ihdr.Width, self.Ihdr.Height))
-	var currentFcTL Fctl
+	beforeImage := image.NewRGBA(image.Rect(0, 0, self.Ihdr.Width, self.Ihdr.Height))
+	currentFcTL := Fctl{OffsetX: 0, OffsetY: 0, Width: self.Ihdr.Width, Height: self.Ihdr.Height, SequenceNumber: 0, DelayDen: 1, DelayNum: 1, BlendOp: uint8(OpSource)}
 	// sequence_numberが小さい順になめていく,マージソート的なあれで
 	numOfSeq := len(self.Fctl) + len(self.Fdat)
 	fcTLPtr := 0
@@ -263,7 +277,7 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 		}
 		fdATSeqNum := -1
 		if fdATPtr < len(self.Fdat) {
-			fcTLSeqNum = int(self.Fdat[fdATPtr].SequenceNumber)
+			fdATSeqNum = int(self.Fdat[fdATPtr].SequenceNumber)
 		}
 		if fcTLSeqNum == -1 && fdATSeqNum == -1 {
 			// 全部なめ終わった
@@ -288,17 +302,48 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 		// 今のcurrentFcTLとfdATPtrのデータで画像を作る
 		if isFdDATProcess {
 			// blendOpによっては前前回フレームの画像を保持する必要がある点に注意
-			img, err := self.Fdat[fdATPtr].FrameData.ToImage(currentFcTL.Width, currentFcTL.Height, ColorType(self.Ihdr.ColorType))
+			fdatImage, err := self.Fdat[fdATPtr].FrameData.ToImage(currentFcTL.Width, currentFcTL.Height, ColorType(self.Ihdr.ColorType))
 			if err != nil {
 				return nil, err
 			}
 			// imgとfcTL情報を使って画像合成する
+			// currentImage: 現在のフレームの完成形, fdatImage: fdatから作った画像。Frameサイズとは一致しないかもしれない, beforeImage: 前回のフレーム画像
+			currentImage := image.NewRGBA(beforeImage.Bounds())
 
+			// beforeImage -> currentImage: 全領域コピー
+			beforeP1 := image.Point{0, 0}
+			beforeP2 := beforeP1.Add(image.Point{self.Ihdr.Width, self.Ihdr.Height})
+			beforeRect := image.Rectangle{beforeP1, beforeP2}
+			draw.Draw(currentImage, beforeRect, beforeImage, beforeP1, draw.Over) // over or src
+
+			// fdatImage -> currentImage: fdatで規定された領域に貼り付け
+			// コピー元画像は全領域を選択
+			fdatP1 := image.Point{0, 0}
+			fdatP2 := fdatP1.Add(fdatImage.Bounds().Size())
+			fdatRect := image.Rectangle{fdatP1, fdatP2}
+			// コピー先はfcTLでペースト先が決まっている
+			fdatPasteP1 := image.Point{int(currentFcTL.OffsetX), int(currentFcTL.OffsetY)}
+			// fdatPasteP2 := fdatPasteP1.Add(image.Point{currentFcTL.Width, currentFcTL.Height})
+			// fdatPasteRect := image.Rectangle{fdatPasteP1, fdatPasteP2}
+			// TODO: 引数の使い方、特に2,4があっているか要検証
+			draw.Draw(currentImage, fdatRect, fdatImage, fdatPasteP1, draw.Over) // over or src
+			// TODO: Opによってアルファブレンディングを切り替え
+
+			// TODO: コピーした画像と、フレームの表示時間を結果に追加
+			beforeImage = currentImage
+
+			// TODO: 設定によって、beforeImageにデータを設定
+
+			// TODO: remove debug save image
+			saveJpg(currentImage, fmt.Sprintf("%04d_debug.jpg", fdATPtr))
+
+			// fdATのインクリ
 			fdATPtr++
+
 		}
 
 	}
-
+	// TODO: 最終的な結果を返す
 	return nil, nil
 }
 func (idat *Idat) ToImage(width int, height int, colorType ColorType) (image.Image, error) {

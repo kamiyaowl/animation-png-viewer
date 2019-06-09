@@ -14,8 +14,13 @@ import (
 
 // アニメーションを出したい
 func showAnimation(data *apng.Apng) {
-	showImage(data, "")
-
+	results, err := data.GenerateAnimation()
+	if err != nil {
+		panic(err)
+	}
+	if results == nil {
+		fmt.Println("まだ未実装")
+	}
 }
 
 // アニメーションじゃないとき
