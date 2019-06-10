@@ -9,7 +9,7 @@ import (
 	"hash/crc32"
 	"image"
 	"image/color"
-	"image/draw" // for debug
+	"image/draw"
 	"math"
 	"os"
 	"reflect"
@@ -232,7 +232,6 @@ func (self *Apng) parseFDAT(data []uint8) (err error) {
 }
 
 // Animation PNGとして定義されているすべての画像を生成します
-// acTL chunkがない場合は、IDATの画像一枚を返します
 func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 	// apngでなければ先頭画像だけ返す
 	if !self.IsApng {
@@ -297,7 +296,6 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 				return nil, err
 			}
 			// imgとfcTL情報を使って画像合成する
-			// currentImage: 現在のフレームの完成形, fdatImage: fdatから作った画像。Frameサイズとは一致しないかもしれない, beforeImage: 前回のフレーム画像
 			currentImage := image.NewRGBA(beforeImage.Bounds())
 			beforeP1 := image.Point{0, 0}
 			beforeP2 := beforeP1.Add(image.Point{self.Ihdr.Width, self.Ihdr.Height})
@@ -307,7 +305,6 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 				// beforeImage -> currentImage: 全領域コピー
 				draw.Draw(currentImage, beforeRect, beforeImage, beforeP1, draw.Src)
 			}
-			// fdatImage -> currentImage: fdatで規定された領域に貼り付け
 			// コピー先はfcTLでペースト先が決まっている
 			fdatPasteP1 := image.Point{-int(currentFcTL.OffsetX), -int(currentFcTL.OffsetY)}
 
@@ -319,7 +316,7 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 			draw.Draw(currentImage, beforeRect, fdatImage, fdatPasteP1, op)
 
 			// APNG_DISPOSE_OP_PREVIOUS以外は、現在のフレームで更新しておく
-			if DisposeOp(currentFcTL.BlendOp) != OpNone { // 多分違う
+			if DisposeOp(currentFcTL.BlendOp) != OpNone {
 				beforeImage = currentImage
 			}
 			// 返却値に追加
