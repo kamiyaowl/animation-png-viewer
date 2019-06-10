@@ -310,23 +310,29 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 			// imgとfcTL情報を使って画像合成する
 			// currentImage: 現在のフレームの完成形, fdatImage: fdatから作った画像。Frameサイズとは一致しないかもしれない, beforeImage: 前回のフレーム画像
 			currentImage := image.NewRGBA(beforeImage.Bounds())
-
-			// beforeImage -> currentImage: 全領域コピー
 			beforeP1 := image.Point{0, 0}
 			beforeP2 := beforeP1.Add(image.Point{self.Ihdr.Width, self.Ihdr.Height})
 			beforeRect := image.Rectangle{beforeP1, beforeP2}
-			draw.Draw(currentImage, beforeRect, beforeImage, beforeP1, draw.Over) // over or src
-
+			// APNG_DISPOSE_OP_BACKGROUNDでなければ前の画像そのまま
+			if DisposeOp(currentFcTL.BlendOp) != OpBackground {
+				// beforeImage -> currentImage: 全領域コピー
+				draw.Draw(currentImage, beforeRect, beforeImage, beforeP1, draw.Over) // over or src
+			}
 			// fdatImage -> currentImage: fdatで規定された領域に貼り付け
 			// コピー先はfcTLでペースト先が決まっている
 			fdatPasteP1 := image.Point{-int(currentFcTL.OffsetX), -int(currentFcTL.OffsetY)}
 
-			// TODO: 引数の使い方、特に2,4があっているか要検証
-			draw.Draw(currentImage, beforeRect, fdatImage, fdatPasteP1, draw.Over) // over or src
-			// TODO: Opによってアルファブレンディングを切り替え
+			// blend_opによってアルファブレンディングを切り替え
+			op := draw.Over
+			if BlendOp(currentFcTL.BlendOp) == OpSource {
+				op = draw.Src
+			}
+			draw.Draw(currentImage, beforeRect, fdatImage, fdatPasteP1, op)
 
-			// TODO: コピーした画像と、フレームの表示時間を結果に追加
-			// beforeImage = currentImage
+			// APNG_DISPOSE_OP_PREVIOUS以外は、現在のフレームで更新しておく
+			if DisposeOp(currentFcTL.BlendOp) != OpPrevious {
+				beforeImage = currentImage
+			}
 
 			// TODO: 設定によって、beforeImageにデータを設定
 
