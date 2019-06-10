@@ -268,6 +268,8 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 	numOfSeq := len(self.Fctl) + len(self.Fdat)
 	fcTLPtr := 0
 	fdATPtr := 0
+	// 返却値
+	frames := []AnimationData{}
 	for i := 0; i < numOfSeq; i++ {
 		isFdDATProcess := false
 
@@ -316,7 +318,7 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 			// APNG_DISPOSE_OP_BACKGROUNDでなければ前の画像そのまま
 			if DisposeOp(currentFcTL.BlendOp) != OpBackground {
 				// beforeImage -> currentImage: 全領域コピー
-				draw.Draw(currentImage, beforeRect, beforeImage, beforeP1, draw.Over) // over or src
+				draw.Draw(currentImage, beforeRect, beforeImage, beforeP1, draw.Src)
 			}
 			// fdatImage -> currentImage: fdatで規定された領域に貼り付け
 			// コピー先はfcTLでペースト先が決まっている
@@ -330,21 +332,18 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 			draw.Draw(currentImage, beforeRect, fdatImage, fdatPasteP1, op)
 
 			// APNG_DISPOSE_OP_PREVIOUS以外は、現在のフレームで更新しておく
-			if DisposeOp(currentFcTL.BlendOp) != OpPrevious {
+			if DisposeOp(currentFcTL.BlendOp) != OpNone { // 多分違う
 				beforeImage = currentImage
 			}
-
-			// TODO: 設定によって、beforeImageにデータを設定
-
-			// TODO: remove debug save image
-			saveJpg(currentImage, fmt.Sprintf("debug_image/%04d_debug.jpg", fdATPtr))
-
+			// 返却値に追加
+			ad := AnimationData{Image: currentImage, DelaySeconds: float32(currentFcTL.DelayNum) / float32(currentFcTL.DelayDen)}
+			frames = append(frames, ad)
+			// fdATをインクリしておく
 			fdATPtr++
 		}
 
 	}
-	// TODO: 最終的な結果を返す
-	return nil, nil
+	return frames, nil
 }
 func (idat *Idat) ToImage(width int, height int, colorType ColorType) (image.Image, error) {
 	// deflateめんどいしライブラリで許して
