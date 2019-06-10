@@ -14,8 +14,6 @@
             "args": [
                 "-src",
                 "sample_data/elephant_apng_zopfli.png",
-                "-out",
-                "tmp.jpg",
             ]
         }
     ]

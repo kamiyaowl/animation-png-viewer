@@ -9,9 +9,11 @@ import (
 	"hash/crc32"
 	"image"
 	"image/color"
+	"image/draw" // for debug
 	"math"
 	"os"
 	"reflect"
+	"sort"
 )
 
 type ColorType uint8
@@ -36,12 +38,13 @@ const (
 )
 
 type Apng struct {
-	Ihdr   Ihdr
-	Idat   Idat
-	Fctl   []Fctl
-	Fdat   []Fdat
-	Actl   Actl
-	IsApng bool
+	Ihdr            Ihdr
+	Idat            Idat
+	Fctl            []Fctl
+	Fdat            []Fdat
+	Actl            Actl
+	IsApng          bool
+	UseDefaultImage bool // IDATより前にfcTLがあった場合、IDATが画像0になる
 }
 type Ihdr struct {
 	Width     int
@@ -78,8 +81,8 @@ const (
 // Frame Control
 type Fctl struct {
 	SequenceNumber uint32
-	Width          uint32
-	Height         uint32
+	Width          int
+	Height         int
 	OffsetX        uint32
 	OffsetY        uint32
 	DelayNum       uint16 // Frame Delayの分子
@@ -196,8 +199,8 @@ func (self *Apng) parseFCTL(data []uint8) (err error) {
 	}
 	var fctl Fctl
 	fctl.SequenceNumber = binary.BigEndian.Uint32(data[0:4])
-	fctl.Width = binary.BigEndian.Uint32(data[4:8])
-	fctl.Height = binary.BigEndian.Uint32(data[8:12])
+	fctl.Width = int(binary.BigEndian.Uint32(data[4:8]))
+	fctl.Height = int(binary.BigEndian.Uint32(data[8:12]))
 	fctl.OffsetX = binary.BigEndian.Uint32(data[12:16])
 	fctl.OffsetY = binary.BigEndian.Uint32(data[16:20])
 	fctl.DelayNum = binary.BigEndian.Uint16(data[20:22])
@@ -231,6 +234,7 @@ func (self *Apng) parseFDAT(data []uint8) (err error) {
 // Animation PNGとして定義されているすべての画像を生成します
 // acTL chunkがない場合は、IDATの画像一枚を返します
 func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
+	// apngでなければ先頭画像だけ返す
 	if !self.IsApng {
 		img, err := self.ToImage()
 		if err != nil {
@@ -241,7 +245,92 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 		ret[0].Image = img
 		return ret, nil
 	}
-	return nil, nil
+	// sequence_numberを小さい順にしておかないとマージソートできない
+	sort.Slice(self.Fdat, func(i, j int) bool { return self.Fdat[i].SequenceNumber < self.Fdat[j].SequenceNumber })
+	sort.Slice(self.Fctl, func(i, j int) bool { return self.Fctl[i].SequenceNumber < self.Fctl[j].SequenceNumber })
+	// fdATは元のフレームサイズと一致しているとは限らないためとりあえずすべて画像にする
+	beforeImage := image.NewRGBA(image.Rect(0, 0, self.Ihdr.Width, self.Ihdr.Height))
+	currentFcTL := Fctl{OffsetX: 0, OffsetY: 0, Width: self.Ihdr.Width, Height: self.Ihdr.Height, SequenceNumber: 0, DelayDen: 1, DelayNum: 1, BlendOp: uint8(OpSource)}
+	// sequence_numberが小さい順になめていく,マージソート的なあれで
+	numOfSeq := len(self.Fctl) + len(self.Fdat)
+	fcTLPtr := 0
+	fdATPtr := 0
+	// 返却値
+	frames := []AnimationData{}
+	for i := 0; i < numOfSeq; i++ {
+		isFdDATProcess := false
+
+		fcTLSeqNum := -1
+		if fcTLPtr < len(self.Fctl) {
+			fcTLSeqNum = int(self.Fctl[fcTLPtr].SequenceNumber)
+		}
+		fdATSeqNum := -1
+		if fdATPtr < len(self.Fdat) {
+			fdATSeqNum = int(self.Fdat[fdATPtr].SequenceNumber)
+		}
+		if fcTLSeqNum == -1 && fdATSeqNum == -1 {
+			// 全部なめ終わった
+			break
+		} else if fcTLSeqNum == -1 {
+			// 最後のfdAT
+			isFdDATProcess = true
+		} else if fdATSeqNum == -1 {
+			// 最後のfcTL→ありえないはず
+			return nil, errors.New("fdATと関連付けが取れていないfcTLを検出しました")
+		} else {
+			if fcTLSeqNum == fdATSeqNum {
+				// 同じシーケンス番号にはならない
+				return nil, errors.New("fcTLとfdATのsequence_numberで競合が発生しました")
+			} else if fcTLSeqNum < fdATSeqNum {
+				currentFcTL = self.Fctl[fcTLPtr]
+				fcTLPtr++
+			} else {
+				isFdDATProcess = true
+			}
+		}
+		// 今のcurrentFcTLとfdATPtrのデータで画像を作る
+		if isFdDATProcess {
+			var fdatImage image.Image
+			var err error
+			fdatImage, err = self.Fdat[fdATPtr].FrameData.ToImage(currentFcTL.Width, currentFcTL.Height, ColorType(self.Ihdr.ColorType))
+			if err != nil {
+				return nil, err
+			}
+			// imgとfcTL情報を使って画像合成する
+			// currentImage: 現在のフレームの完成形, fdatImage: fdatから作った画像。Frameサイズとは一致しないかもしれない, beforeImage: 前回のフレーム画像
+			currentImage := image.NewRGBA(beforeImage.Bounds())
+			beforeP1 := image.Point{0, 0}
+			beforeP2 := beforeP1.Add(image.Point{self.Ihdr.Width, self.Ihdr.Height})
+			beforeRect := image.Rectangle{beforeP1, beforeP2}
+			// APNG_DISPOSE_OP_BACKGROUNDでなければ前の画像そのまま
+			if DisposeOp(currentFcTL.BlendOp) != OpBackground {
+				// beforeImage -> currentImage: 全領域コピー
+				draw.Draw(currentImage, beforeRect, beforeImage, beforeP1, draw.Src)
+			}
+			// fdatImage -> currentImage: fdatで規定された領域に貼り付け
+			// コピー先はfcTLでペースト先が決まっている
+			fdatPasteP1 := image.Point{-int(currentFcTL.OffsetX), -int(currentFcTL.OffsetY)}
+
+			// blend_opによってアルファブレンディングを切り替え
+			op := draw.Over
+			if BlendOp(currentFcTL.BlendOp) == OpSource {
+				op = draw.Src
+			}
+			draw.Draw(currentImage, beforeRect, fdatImage, fdatPasteP1, op)
+
+			// APNG_DISPOSE_OP_PREVIOUS以外は、現在のフレームで更新しておく
+			if DisposeOp(currentFcTL.BlendOp) != OpNone { // 多分違う
+				beforeImage = currentImage
+			}
+			// 返却値に追加
+			ad := AnimationData{Image: currentImage, DelaySeconds: float32(currentFcTL.DelayNum) / float32(currentFcTL.DelayDen)}
+			frames = append(frames, ad)
+			// fdATをインクリしておく
+			fdATPtr++
+		}
+
+	}
+	return frames, nil
 }
 func (idat *Idat) ToImage(width int, height int, colorType ColorType) (image.Image, error) {
 	// deflateめんどいしライブラリで許して
@@ -358,6 +447,7 @@ func (self *Apng) Parse(src string) (err error) {
 	}
 	// apngかどうかはacTLがIDATより前に来るかで決まる
 	self.IsApng = false
+	self.UseDefaultImage = false
 	// read chunks
 	isReadIhdr := false
 	isReadIdat := false
@@ -413,6 +503,12 @@ func (self *Apng) Parse(src string) (err error) {
 		case "acTL":
 			err = self.parseACTL(dataBuf)
 		case "fcTL":
+			// IDATより前に定義された場合は、IDATがFrame0になる
+			if !isReadIdat {
+				self.UseDefaultImage = true
+			} else {
+				self.UseDefaultImage = false
+			}
 			err = self.parseFCTL(dataBuf)
 		case "fdAT":
 			err = self.parseFDAT(dataBuf)
