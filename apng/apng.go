@@ -9,8 +9,7 @@ import (
 	"hash/crc32"
 	"image"
 	"image/color"
-	"image/draw"
-	"image/jpeg" // for debug
+	"image/draw" // for debug
 	"math"
 	"os"
 	"reflect"
@@ -102,18 +101,6 @@ type Fdat struct {
 type AnimationData struct {
 	Image        image.Image
 	DelaySeconds float32
-}
-
-// imageをjpegで保存します
-func saveJpg(img image.Image, outPath string) error {
-	f, err := os.Create(outPath)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-	jpeg.Encode(f, img, nil)
-
-	return nil
 }
 
 func BytePerPixel(colorType ColorType) (uint8, error) {
