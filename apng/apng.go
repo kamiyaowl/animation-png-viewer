@@ -268,7 +268,6 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 	numOfSeq := len(self.Fctl) + len(self.Fdat)
 	fcTLPtr := 0
 	fdATPtr := 0
-	idatUsed := self.UseDefaultImage // IDATの手前にfcTLがない(=IDATはプレビュー専用のため)、DefaultImageとして消費されたとしてtrue
 	for i := 0; i < numOfSeq; i++ {
 		isFdDATProcess := false
 
@@ -304,11 +303,7 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 		if isFdDATProcess {
 			var fdatImage image.Image
 			var err error
-			if !idatUsed {
-				fdatImage, err = self.ToImage()
-			} else {
-				fdatImage, err = self.Fdat[fdATPtr].FrameData.ToImage(currentFcTL.Width, currentFcTL.Height, ColorType(self.Ihdr.ColorType))
-			}
+			fdatImage, err = self.Fdat[fdATPtr].FrameData.ToImage(currentFcTL.Width, currentFcTL.Height, ColorType(self.Ihdr.ColorType))
 			if err != nil {
 				return nil, err
 			}
@@ -323,33 +318,22 @@ func (self *Apng) GenerateAnimation() ([]AnimationData, error) {
 			draw.Draw(currentImage, beforeRect, beforeImage, beforeP1, draw.Over) // over or src
 
 			// fdatImage -> currentImage: fdatで規定された領域に貼り付け
-			// コピー元画像は全領域を選択
-			fdatP1 := image.Point{0, 0}
-			fdatP2 := fdatP1.Add(fdatImage.Bounds().Size())
-			fdatRect := image.Rectangle{fdatP1, fdatP2}
 			// コピー先はfcTLでペースト先が決まっている
-			fdatPasteP1 := image.Point{int(currentFcTL.OffsetX), int(currentFcTL.OffsetY)}
-			// fdatPasteP2 := fdatPasteP1.Add(image.Point{currentFcTL.Width, currentFcTL.Height})
-			// fdatPasteRect := image.Rectangle{fdatPasteP1, fdatPasteP2}
+			fdatPasteP1 := image.Point{-int(currentFcTL.OffsetX), -int(currentFcTL.OffsetY)}
+
 			// TODO: 引数の使い方、特に2,4があっているか要検証
-			draw.Draw(currentImage, fdatRect, fdatImage, fdatPasteP1, draw.Over) // over or src
+			draw.Draw(currentImage, beforeRect, fdatImage, fdatPasteP1, draw.Over) // over or src
 			// TODO: Opによってアルファブレンディングを切り替え
 
 			// TODO: コピーした画像と、フレームの表示時間を結果に追加
-			beforeImage = currentImage
+			// beforeImage = currentImage
 
 			// TODO: 設定によって、beforeImageにデータを設定
 
 			// TODO: remove debug save image
-			saveJpg(currentImage, fmt.Sprintf("debug_image/idat_%v_%04d_debug.jpg", idatUsed, fdATPtr))
+			saveJpg(currentImage, fmt.Sprintf("debug_image/%04d_debug.jpg", fdATPtr))
 
-			// fdATのインクリ(Idatを使った場合はインクリしない)
-			if !idatUsed {
-				idatUsed = true
-			} else {
-				fdATPtr++
-			}
-
+			fdATPtr++
 		}
 
 	}
