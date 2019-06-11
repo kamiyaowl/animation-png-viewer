@@ -58,7 +58,7 @@ func showAnimation(data *apng.Apng) {
 		win.Clear(colornames.Skyblue)
 		sprites[currentIndex].Draw(win, pixel.IM.Moved(win.Bounds().Center()))
 		win.Update()
-		duration := time.Millisecond * time.Duration(frames[currentIndex].DelaySeconds)
+		duration := time.Millisecond * time.Duration(frames[currentIndex].DelaySeconds*1000)
 		time.Sleep(duration)
 	}
 }
