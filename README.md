@@ -1,4 +1,4 @@
-# apng-impl
+# Animation PNG Viewer
 
 ![image](https://pbs.twimg.com/media/D8OrC_hVsAEUrVi?format=jpg&name=medium)
 
